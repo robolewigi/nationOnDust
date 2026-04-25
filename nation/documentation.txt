@@ -1160,6 +1160,7 @@ polNames=["urbanSprawl", "policeState", "quarantine", "divineRight"]
 buildNames=["farm", "camp", "lodge", "mound"]
 eventNames=["unitMigration", "mobilize", "disease", "moundCreate"]
 resourceNames=["Bushels","Feathers", "Hides", "Wood", "flint(S)", "Copper"]
+pictureNames= ["bush.txt","fish.txt","turkey.txt","deer.txt", "tree.txt","stone.txt","copper.txt","human.txt", "humanFlip.txt","hut.txt","fire.txt","weak.txt", "farm.txt","camp.txt","lodge.txt","mound.txt"]
 current_keys = set()
 
 class variables():
@@ -1172,7 +1173,7 @@ class variables():
   self.windowState=-1 #(-1)-none 0-help 1-units 2-resources 3-internal 4-diplomacy
   self.history=[0, ["h"]]
   self.fpsTime = time.time()
-  self.pictures={}
+  self.pictures=[]
   self.options=[0,500,1, 0] #0-pictures 1-gameSpeed 2-difficulty 3-windowSize
   self.status=""
   self.console=""
@@ -1408,8 +1409,8 @@ def graphics(r=None):
    v.buffer[1][-1]= str(v.debug[0])[-v.xy[0]:]
  else:
   buf = [createMap(1, [(x+ p.mapScroll)%w.mapSize, hei-1-r])+ " " for x in range(wid)]
-  names= ["bush", "fish", "turkey", "deer", "tree", "stone", "copper", "human", "humanFlip", "hut", "fire", "weak"]
   items =( [[re.resource, re.loc, 1, int(re.claimed)] for re in w.regions if re.resource!= -1] 
+  +[[reg.building+ 12, reg.loc+ w.regionWidth//2] for reg in w.regions if reg.building!= -1] 
   +[[10, p.homeLocation, 1]]
   +[[9, au.loc[0], au.loc[1]] for au in w.auths if au is not None]
   +[[(8 if un.flipped else 7) if un.weak== 0 else 11, un.loc[0], un.loc[1], un.broken>0] for un in w.units if un is not None])
@@ -1418,7 +1419,7 @@ def graphics(r=None):
    rLoc = (re[1]-p.mapScroll)%w.mapSize
    if rLoc > w.mapSize-16: rLoc -= w.mapSize
    isUnit = re[0] in [7,8]
-   for pi in v.pictures[names[re[0]]]:
+   for pi in v.pictures[re[0]]:
     px = rLoc + pi[0]- 8
     if 0 <= px < wid and pi[1] == hei-re[2]-r:
      newCol= [pi[2],pi[3],pi[4]]
@@ -1501,7 +1502,7 @@ def inputLoop():
   graphics(v.xy[1]-1)
   draw()
 
-#!partGame
+#@partGame
 def commands():
  c= v.console.lower()
  saveOn= False
@@ -1705,7 +1706,7 @@ def saveLoadGame(load= False, deb= False):
      elif hasattr(p, key): setattr(p, key, parsed)
   except: pass
 
-#!gameplay
+#@gameplay
 def investmentHelp(idx= 0, get= False):
  if not get:
   if not p.investments[idx].enabled: return
@@ -1840,32 +1841,38 @@ def begin():
  createMap()
  cursorVisible()
  saveLoad(True)
- try:
-  names= (["bush.txt", "fish.txt", "turkey.txt", #0-2
- "deer.txt", "tree.txt", "stone.txt", "copper.txt", "human.txt", #3-7
- "humanFlip.txt", "hut.txt", "fire.txt", "weak.txt", "farm.txt", #8-12
- "camp.txt", "lodge.txt"]) #13-14
-  for i in range(len(names)):
-   with open(os.path.dirname(os.path.abspath(__file__))+"/img/"+names[i], 'r') as file:
-    data = eval(f'[{file.read()}]')
-    newList=[]
-    for idx in data[1:]:
-     newList.append([int(idx[0])%16,int(idx[0])//16, int(idx[1])//(256*256), int(idx[1])//256%256, int(idx[1])%256])
-    maxY = max(pi[1] for pi in newList)
-    for pi in newList:
-     pi[1] = maxY - pi[1]
-    name = names[i].replace(".txt","")
-    v.pictures[name] = newList
 
+ img_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "img")
+ try:
+  for i, name in enumerate(pictureNames):
+   path = os.path.join(img_dir, name)
+   with open(path, 'r') as file:
+    raw = file.read().strip()
+   data = eval(f'[{raw}]', {"__builtins__": {}}, {})
+
+   new_list = [[
+    int(idx[0]) % 16,
+    int(idx[0]) // 16,
+    int(idx[1]) // (256 * 256),
+    int(idx[1]) // 256 % 256,
+    int(idx[1]) % 256,
+    ]
+    for idx in data[1:]
+   ]
+   if new_list:
+    max_y = max(pi[1] for pi in new_list)
+    for pi in new_list:
+     pi[1] = max_y - pi[1]
+   v.pictures.append(new_list)
   for i in range(4):
-   if p.advancements[i]<3:
-    p.investments.append(investment(i*4+ p.advancements[i]))
+   if p.advancements[i] < 3:
+    p.investments.append(investment(i * 4 + p.advancements[i]))
   for i in range(p.advancements[2]):
-   p.investments.append(investment(20+ i))
+   p.investments.append(investment(20 + i))
 
  except Exception as e:
-  print("error in (fileLocation)/img")
-  v.running=2
+  print(f"Error loading images from '{img_dir}': {e}")
+  v.running = 2
 
 def gameLoop(looped= True):
  while True:
@@ -1935,7 +1942,7 @@ def gameLoop(looped= True):
    termios.tcsetattr(fd, termios.TCSADRAIN, oldSettings)
    traceback.print_exc()
     
-#!gameplayEnd
+#@gameplayEnd
 
 begin()
 threading.Thread(target=inputLoop, daemon=True).start()
